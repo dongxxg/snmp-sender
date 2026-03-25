@@ -1,0 +1,24 @@
+[Service]
+StartupMsg = "UniOS Alarm Collector Started"
+Target = "127.0.0.1"
+Port = 8002
+Transport = "udp"
+Timeout = 5
+Retries = 2
+ContextName = ""
+Community = "public"
+Oids = []
+
+[SNMP]
+SecurityLevel = ""
+UserName = ""
+AuthPassword = ""
+AuthProtocol = ""
+PrivProtocol = ""
+PrivPassword = ""
+
+[Logging]
+IsJSON = false
+Level = "info"
+KeepInContainer = false
+MaxSize = 1024

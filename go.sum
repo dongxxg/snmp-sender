@@ -1,0 +1,4 @@
+github.com/gosnmp/gosnmp v1.43.2 h1:F9loz6uMCNtIQj0RNO5wz/mZ+FZt2WyNKJYOvw+Zosw=
+github.com/gosnmp/gosnmp v1.43.2/go.mod h1:smHIwoaqr1M+HTAEd7+mKkPs8lp3Lf/U+htPUql1Q3c=
+unitechs.com/unios-dice/uni-base v1.0.48 h1:1x2cJCYTRn2Fvm8Mt72BzUTSp1ci4K6RRxS+5xro6GY=
+unitechs.com/unios-dice/uni-base v1.0.48/go.mod h1:+Z6U+coDL9gUC8rVyPPcnKoTe/hwk9K2mnSiMCragq4=
