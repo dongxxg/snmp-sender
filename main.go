@@ -12,9 +12,9 @@ import (
 	"io"
 	"os"
 	"snmp-sender/internal"
+	"snmp-sender/internal/client"
 	"strings"
 	"time"
-	"unitechs.com/unios-dice/uni-base/core/config"
 	"unitechs.com/unios-dice/uni-base/core/log"
 )
 
@@ -90,14 +90,8 @@ func main() {
 
 	log.Println("Starting")
 
-	// 选择 SNMPv2c 作为默认，避免 SNMPv3 配置未填写导致无法发送。
-	gosnmp.Default.Version = gosnmp.Version2c
-	gosnmp.Default.Target = config.GetString("Service.Target")
-	gosnmp.Default.Port = uint16(config.GetInt("Service.Port"))
-	gosnmp.Default.Community = config.GetString("Service.Community")
-	gosnmp.Default.Timeout = time.Duration(config.GetInt("Service.Timeout")) * time.Second
-	gosnmp.Default.Retries = config.GetInt("Service.Retries")
-	gosnmp.Default.Transport = config.GetString("Service.Transport")
+	// 使用 SNMPv3 配置，通过配置文件读取并构造 GoSNMP 客户端
+	// gosnmp.Default 的设置移除，改为通过 client.Build() 获取配置好的客户端
 
 	// 兼容两种放置方式：根目录 `trap.json` 或 `internal/trap.json`
 	traps, err := loadTraps("trap.json")
@@ -113,8 +107,11 @@ func main() {
 
 	start := time.Now()
 
-	// 连接一次，稳定地每 1 秒发送一条 trap
-	g := *gosnmp.Default
+	// 构造并连接一个基于配置的 SNMPv3 客户端
+	g, err := client.Build()
+	if err != nil {
+		log.Fatal(err)
+	}
 	if err := g.Connect(); err != nil {
 		log.Fatal(err)
 	}

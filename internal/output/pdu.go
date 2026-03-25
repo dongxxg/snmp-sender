@@ -36,13 +36,57 @@ func PrintPDU(pdu gosnmp.SnmpPDU) {
 	case gosnmp.Integer:
 		log.Printf("OID: %-40s  Type: Integer      Value: %d\n", pdu.Name, gosnmp.ToBigInt(pdu.Value))
 	case gosnmp.Counter32:
-		log.Printf("OID: %-40s  Type: Counter32    Value: %d\n", pdu.Name, pdu.Value.(uint))
+		var v uint32
+		switch val := pdu.Value.(type) {
+		case uint:
+			v = uint32(val)
+		case uint32:
+			v = val
+		case int:
+			v = uint32(val)
+		default:
+			v = 0
+		}
+		log.Printf("OID: %-40s  Type: Counter32    Value: %d\n", pdu.Name, v)
 	case gosnmp.Counter64:
-		log.Printf("OID: %-40s  Type: Counter64    Value: %d\n", pdu.Name, pdu.Value.(uint64))
+		var v uint64
+		switch val := pdu.Value.(type) {
+		case uint64:
+			v = val
+		case uint:
+			v = uint64(val)
+		case int:
+			v = uint64(val)
+		default:
+			v = 0
+		}
+		log.Printf("OID: %-40s  Type: Counter64    Value: %d\n", pdu.Name, v)
 	case gosnmp.Gauge32:
-		log.Printf("OID: %-40s  Type: Gauge32      Value: %d\n", pdu.Name, pdu.Value.(uint))
+		var v uint32
+		switch val := pdu.Value.(type) {
+		case uint:
+			v = uint32(val)
+		case uint32:
+			v = val
+		case int:
+			v = uint32(val)
+		default:
+			v = 0
+		}
+		log.Printf("OID: %-40s  Type: Gauge32      Value: %d\n", pdu.Name, v)
 	case gosnmp.TimeTicks:
-		log.Printf("OID: %-40s  Type: TimeTicks    Value: %d\n", pdu.Name, pdu.Value.(uint32))
+		var v uint32
+		switch val := pdu.Value.(type) {
+		case uint32:
+			v = val
+		case uint:
+			v = uint32(val)
+		case int:
+			v = uint32(val)
+		default:
+			v = 0
+		}
+		log.Printf("OID: %-40s  Type: TimeTicks    Value: %d\n", pdu.Name, v)
 	case gosnmp.IPAddress:
 		log.Printf("OID: %-40s  Type: IPAddress    Value: %s\n", pdu.Name, pdu.Value.(string))
 	case gosnmp.ObjectIdentifier:
