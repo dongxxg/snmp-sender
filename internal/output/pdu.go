@@ -24,7 +24,15 @@ func PrintPDUs(pdus []gosnmp.SnmpPDU) {
 func PrintPDU(pdu gosnmp.SnmpPDU) {
 	switch pdu.Type {
 	case gosnmp.OctetString:
-		log.Printf("OID: %-40s  Type: OctetString  Value: %s\n", pdu.Name, string(pdu.Value.([]byte)))
+		// gosnmp may store OctetString as either []byte or string depending on how we build the PDU.
+		switch v := pdu.Value.(type) {
+		case []byte:
+			log.Printf("OID: %-40s  Type: OctetString  Value: %s\n", pdu.Name, string(v))
+		case string:
+			log.Printf("OID: %-40s  Type: OctetString  Value: %s\n", pdu.Name, v)
+		default:
+			log.Printf("OID: %-40s  Type: OctetString  Value: %v\n", pdu.Name, pdu.Value)
+		}
 	case gosnmp.Integer:
 		log.Printf("OID: %-40s  Type: Integer      Value: %d\n", pdu.Name, gosnmp.ToBigInt(pdu.Value))
 	case gosnmp.Counter32:

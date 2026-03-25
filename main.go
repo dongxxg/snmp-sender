@@ -8,127 +8,134 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/gosnmp/gosnmp"
 	"io"
 	"os"
 	"snmp-sender/internal"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
+	"unitechs.com/unios-dice/uni-base/core/config"
 	"unitechs.com/unios-dice/uni-base/core/log"
 )
 
+func normalizeOID(oid string) string {
+	oid = strings.TrimSpace(oid)
+	if oid == "" {
+		return ""
+	}
+	if strings.HasPrefix(oid, ".") {
+		return oid
+	}
+	return "." + oid
+}
+
 func main() {
+	loadTraps := func(path string) ([]internal.Trap, error) {
+		open, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer open.Close()
+		raw, err := io.ReadAll(open)
+		if err != nil {
+			return nil, err
+		}
+		var traps []internal.Trap
+		if err := json.Unmarshal(raw, &traps); err != nil {
+			return nil, err
+		}
+		return traps, nil
+	}
+
+	buildTrap := func(t internal.Trap, start time.Time) (gosnmp.SnmpTrap, error) {
+		ticks := uint32(time.Since(start).Milliseconds() / 10) // SNMP TimeTicks: 1/100s
+
+		vars := []gosnmp.SnmpPDU{
+			{
+				Name:  ".1.3.6.1.2.1.1.3.0", // sysUpTime.0
+				Type:  gosnmp.TimeTicks,
+				Value: ticks,
+			},
+			{
+				Name:  ".1.3.6.1.6.3.1.1.4.1.0", // snmpTrapOID.0
+				Type:  gosnmp.ObjectIdentifier,
+				Value: normalizeOID(t.TrapOid),
+			},
+		}
+
+		for _, f := range t.Oids {
+			// 兼容两种 trap.json 写法：
+			// 1) oid 填表5字段名（EsightRealtimeAlarmFieldDefs 的 key，如 iMAPNorthboundAlarmCSN）
+			// 2) oid 填 base OID（如 1.3.6.1.4.1.2011.2...3）
+			pdu, ok, err := internal.BuildEsightRealtimeAlarmPDU(f.Oid, f.Value)
+			if err != nil {
+				return gosnmp.SnmpTrap{}, err
+			}
+			if !ok {
+				pdu2, ok2, err2 := internal.BuildEsightRealtimeAlarmPDUFromOID(f.Oid, f.Value)
+				if err2 != nil {
+					return gosnmp.SnmpTrap{}, err2
+				}
+				if !ok2 {
+					log.Printf("unknown table5 field/oid: %s, skip", f.Oid)
+					continue
+				}
+				pdu = pdu2
+			}
+			vars = append(vars, pdu)
+		}
+
+		return gosnmp.SnmpTrap{Variables: vars}, nil
+	}
+
 	log.Println("Starting")
-	open, err := os.Open("conf.json")
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	defer open.Close()
-	all, err := io.ReadAll(open)
-	if err != nil {
-		return
-	}
-	var conf internal.Conf
-	_ = json.Unmarshal(all, &conf)
-	gosnmp.Default.Target = conf.Target
-	//gosnmp.Default.Transport = conf.Transport
-	gosnmp.Default.Port = conf.Port
-	gosnmp.Default.Community = conf.Community
+
+	// 选择 SNMPv2c 作为默认，避免 SNMPv3 配置未填写导致无法发送。
 	gosnmp.Default.Version = gosnmp.Version2c
-	open2, err := os.Open("trap.json")
+	gosnmp.Default.Target = config.GetString("Service.Target")
+	gosnmp.Default.Port = uint16(config.GetInt("Service.Port"))
+	gosnmp.Default.Community = config.GetString("Service.Community")
+	gosnmp.Default.Timeout = time.Duration(config.GetInt("Service.Timeout")) * time.Second
+	gosnmp.Default.Retries = config.GetInt("Service.Retries")
+	gosnmp.Default.Transport = config.GetString("Service.Transport")
+
+	// 兼容两种放置方式：根目录 `trap.json` 或 `internal/trap.json`
+	traps, err := loadTraps("trap.json")
 	if err != nil {
-		return
+		traps, err = loadTraps("internal/trap.json")
 	}
-	defer open2.Close()
-	all, err = io.ReadAll(open2)
-	if err != nil {
-		return
-	}
-	var traps []internal.Trap
-	err = json.Unmarshal(all, &traps)
 	if err != nil {
 		log.Fatal(err)
 	}
-	sleep := time.Millisecond * time.Duration(conf.Sleep)
-	ipFile, err := os.Open("ip.txt")
-	if err != nil {
-		fmt.Println(err)
-		return
+	if len(traps) == 0 {
+		log.Fatal("trap.json contains no traps")
 	}
-	defer ipFile.Close()
-	all, err = io.ReadAll(ipFile)
-	if err != nil {
-		fmt.Println(err)
-		return
+
+	start := time.Now()
+
+	// 连接一次，稳定地每 1 秒发送一条 trap
+	g := *gosnmp.Default
+	if err := g.Connect(); err != nil {
+		log.Fatal(err)
 	}
-	var sDatas []gosnmp.SnmpTrap
-	ips := strings.Split(string(all), "\n")
-	var ipCursor int
-	for _, trap := range traps {
-		var oids []gosnmp.SnmpPDU
-		oids = append(oids, gosnmp.SnmpPDU{
-			Name:  ".1.3.6.1.6.3.1.1.4.1.0",
-			Type:  gosnmp.ObjectIdentifier,
-			Value: ".1.3.6.1.6.3.1.1.5.1",
-		})
-		for _, oid := range trap.Oids {
-			if oid.Value == "$IP" {
-				oids = append(oids, gosnmp.SnmpPDU{
-					Name:  oid.Oid,
-					Value: ips[ipCursor],
-					Type:  gosnmp.OctetString,
-				})
-				ipCursor += 1
-				if ipCursor == len(ips) {
-					ipCursor = 0
-				}
-			} else if oid.Value == "$NUM++" {
-				oids = append(oids, gosnmp.SnmpPDU{
-					Name:  oid.Oid,
-					Value: fmt.Sprintf("xx%d", internal.Num),
-					Type:  gosnmp.OctetString,
-				})
-				internal.Num += 1
-			} else {
-				if oid.Type == "str" {
-					oids = append(oids, gosnmp.SnmpPDU{
-						Name:  oid.Oid,
-						Value: oid.Value,
-						Type:  gosnmp.OctetString,
-					})
-				} else if oid.Type == "int" {
-					val, _ := strconv.Atoi(oid.Value)
-					oids = append(oids, gosnmp.SnmpPDU{
-						Name:  oid.Oid,
-						Value: val,
-						Type:  gosnmp.Integer,
-					})
-				}
+	defer g.Conn.Close()
+
+	idx := 0
+	for {
+		t := traps[idx]
+		snmpTrap, err := buildTrap(t, start)
+		if err != nil {
+			log.Printf("build trap failed: %v", err)
+		} else {
+			if _, err := g.SendTrap(snmpTrap); err != nil {
+				log.Printf("SendTrap failed: %v", err)
 			}
 		}
 
-		t := gosnmp.SnmpTrap{
-			Variables: oids,
-			//Enterprise: ".1.3.6.1.6.3.1.1.5.1",
+		idx++
+		if idx >= len(traps) {
+			idx = 0
 		}
-		sDatas = append(sDatas, t)
-	}
-	for i := 0; i < conf.Repeats; i++ {
-		fmt.Println("new:", i)
-		t := time.Now()
-		group := sync.WaitGroup{}
-		for j := 0; j < conf.Threads; j++ {
-			group.Add(1)
-			go func() {
-				internal.Send(sDatas, sleep)
-				group.Done()
-			}()
-		}
-		group.Wait()
-		fmt.Println("finish:", i, " use time:", time.Now().Sub(t).String())
+		time.Sleep(1 * time.Second)
 	}
 }
