@@ -13,6 +13,7 @@ import (
 	"os"
 	"snmp-sender/internal"
 	"snmp-sender/internal/client"
+	"snmp-sender/pkg/config"
 	"strings"
 	"time"
 	"unitechs.com/unios-dice/uni-base/core/log"
@@ -30,6 +31,8 @@ func normalizeOID(oid string) string {
 }
 
 func main() {
+	config.ReplaceByEnv()
+
 	loadTraps := func(path string) ([]internal.Trap, error) {
 		open, err := os.Open(path)
 		if err != nil {

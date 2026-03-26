@@ -10,12 +10,12 @@ Community = "public"
 Oids = []
 
 [SNMP]
-SecurityLevel = ""
-UserName = ""
-AuthPassword = ""
-AuthProtocol = ""
-PrivProtocol = ""
-PrivPassword = ""
+Securitylevel = "AuthNoPriv" # AuthPriv NoAuthNoPriv AuthNoPriv
+UserName = "nms2-admin"
+AuthPassword = "zhongying123456" # password
+PrivPassword = "zhongying123456" #password
+AuthProtocol = "SHA512" # MD5   SHA   SHA224    SHA256    SHA384    SHA512
+PrivProtocol = "AES256" # DES    AES    AES192   AES256   AES192C    AES256C
 
 [Logging]
 IsJSON = false

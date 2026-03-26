@@ -1,0 +1,5 @@
+FROM hub.unitechs.com/public/alpine:3.19-x86
+
+ADD {{project}}.tar.gz /
+WORKDIR /{{project}}
+ENTRYPOINT ["/{{project}}/{{project}}"]
